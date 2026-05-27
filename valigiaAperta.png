@@ -1,0 +1,374 @@
+/*
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ */
+package com.mycompany.escaperoom1;
+
+import javax.swing.*;
+import java.awt.*;
+import java.net.URL;
+
+public class EscapeRoom1 extends JFrame {
+
+    // Password richiesta per la valigia
+    private final int FORZA_CODICE_1 = 5;
+    private final int FORZA_CODICE_2 = 2;
+    private final int FORZA_CODICE_3 = 3;
+    private final int FORZA_CODICE_4 = 1;
+
+    // Variabili per tracciare lo stato dei 4 rulli numerici
+    private int num1 = 0, num2 = 0, num3 = 0, num4 = 0; 
+
+    // STATI DEL GIOCO (Inventario e Progresso)
+    private boolean luceAccesa = false; // 💡 NUOVO: Traccia lo stato della corrente
+    private boolean valigiaAperta = false;
+    private boolean haChiave = false; 
+    private int statoSchermo = 0; // 0 = Vagone, 1 = Valigia, 2 = Mappa, 3 = Quadro Elettrico
+
+    // Gestione dei Cavi (Minigioco Among Us)
+    private int cavoSelezionato = -1; // Memorizza quale cavo a sinistra è stato cliccato (-1 = nessuno)
+    private boolean cavoRossoConnesso = false;
+    private boolean cavoBluConnesso = false;
+    private boolean cavoGialloConnesso = false;
+
+    // Componenti Grafici Principali
+    private JLabel labelSfondo;
+    private JPanel pannelloDettaglio; 
+    private JPanel pannelloCavi; // 🔌 NUOVO: Il pannello per l'indovinello dei fili
+    
+    private JButton bottoneValigietta, bottoneMappa, bottonePorta, btnIndietro, bottoneQuadroGeneratore;
+    private JButton btnNum1, btnNum2, btnNum3, btnNum4, btnApri, bottoneChiaveInvisibile;
+
+    // Icone salvate
+    private ImageIcon imgVagone, imgVagoneBuio, imgValigiaChiusa, imgValigiaAperta, imgMappaGrande;
+
+    public EscapeRoom1() {
+        setTitle("Escape Room 1 - Il Vagone");
+        setSize(800, 600);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null); 
+        setLayout(null); 
+
+        // Caricamento immagini di sfondo
+        imgVagone = caricaIcona("/escapeimgs/vagone1.png", 800, 560);
+        imgVagoneBuio = caricaIcona("/escapeimgs/vagonebuio.png", 800, 560); // 🌆 Immagine buia di partenza
+        imgValigiaChiusa = caricaIcona("/escapeimgs/valigiaChiusa.png", 500, 380);
+        imgValigiaAperta = caricaIcona("/escapeimgs/valigiaAperta.png", 500, 380);
+        imgMappaGrande = caricaIcona("/escapeimgs/mappa.png", 500, 380);
+
+        // 1. CREAZIONE DEL CONTENITORE DELLO SFONDO GENERALE (Inizia al buio)
+        labelSfondo = new JLabel(imgVagoneBuio);
+        labelSfondo.setBounds(0, 0, 800, 560);
+        labelSfondo.setLayout(null); 
+        add(labelSfondo);
+
+        // ⚡ BOTTONE INTERATTIVO DEL QUADRO ELETTRICO (Visibile solo al buio)
+        bottoneQuadroGeneratore = creaBottoneTrasparente(30, 380, 110, 50); 
+        // Puoi impostare un'icona temporanea o lasciarlo invisibile sopra la scatola dei fusibili nello sfondo buio
+        bottoneQuadroGeneratore.setToolTipText("Quadro Elettrico Bloccato");
+
+        // 2. CREAZIONE BOTTONI INTERATTIVI NEL VAGONE (Standard)
+        bottoneValigietta = creaBottoneTrasparente(260, 450, 120, 60);
+        URL urlValigia = getClass().getResource("/escapeimgs/valigietta.png");
+        if(urlValigia != null) {
+            bottoneValigietta.setIcon(caricaIcona("/escapeimgs/valigietta.png", 120, 60));
+        }
+
+        bottoneMappa = creaBottoneTrasparente(150, 250, 80, 60);
+        URL urlMappaIcona = getClass().getResource("/escapeimgs/mappa1.png");
+        if (urlMappaIcona != null) {
+            bottoneMappa.setIcon(caricaIcona("/escapeimgs/mappa1.png", 80, 60));
+        }
+
+        bottonePorta = creaBottoneTrasparente(680, 150, 100, 300);
+
+        // 🛠️ 3. CREAZIONE DEL PANNELLO DI DETTAGLIO OVERLAY (VALIGIA / MAPPA)
+        pannelloDettaglio = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                if (statoSchermo == 1) {
+                    g.drawImage(valigiaAperta ? imgValigiaAperta.getImage() : imgValigiaChiusa.getImage(), 0, 0, this);
+                } else if (statoSchermo == 2) {
+                    g.drawImage(imgMappaGrande.getImage(), 0, 0, this);
+                }
+            }
+        };
+        pannelloDettaglio.setBounds(150, 40, 500, 430); 
+        pannelloDettaglio.setLayout(null);
+        pannelloDettaglio.setOpaque(false); 
+        pannelloDettaglio.setVisible(false);
+
+        // 🔌 4. PANNELLO DETTAGLIO CAVI (MINIGIOCO IN STILE AMONG US)
+        inizializzaPannelloCavi();
+
+        // COMPONENTI INTERNI AL PANNELLO VALIGIA
+        btnNum1 = new JButton(String.valueOf(num1));
+        btnNum2 = new JButton(String.valueOf(num2));
+        btnNum3 = new JButton(String.valueOf(num3));
+        btnNum4 = new JButton(String.valueOf(num4)); 
+
+        Font fontNumeri = new Font("Arial", Font.BOLD, 20);
+        JButton[] rulli = {btnNum1, btnNum2, btnNum3, btnNum4};
+        
+        int xIniziale = 140; 
+        for (int i = 0; i < rulli.length; i++) {
+            rulli[i].setFont(fontNumeri);
+            rulli[i].setFocusPainted(false);
+            rulli[i].setBackground(Color.DARK_GRAY);
+            rulli[i].setForeground(Color.WHITE);
+            rulli[i].setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1));
+            rulli[i].setBounds(xIniziale + (i * 55), 150, 45, 40);
+            pannelloDettaglio.add(rulli[i]);
+        }
+
+        btnApri = new JButton("APRI");
+        btnApri.setFont(new Font("Arial", Font.BOLD, 12));
+        btnApri.setBounds(190, 210, 100, 30);
+        btnApri.setBackground(new Color(34, 139, 34)); 
+        btnApri.setForeground(Color.WHITE);
+        btnApri.setFocusPainted(false);
+        pannelloDettaglio.add(btnApri);
+
+        bottoneChiaveInvisibile = creaBottoneTrasparente(190, 140, 100, 60);
+        pannelloDettaglio.add(bottoneChiaveInvisibile);
+
+        btnIndietro = new JButton("⬅ Torna al Vagone");
+        btnIndietro.setFont(new Font("Arial", Font.BOLD, 11));
+        btnIndietro.setBounds(165, 390, 160, 25);
+        btnIndietro.setBackground(Color.DARK_GRAY);
+        btnIndietro.setForeground(Color.WHITE);
+        btnIndietro.setFocusPainted(false);
+        pannelloDettaglio.add(btnIndietro);
+
+        // ==========================================
+        //             LOGICHE DI GIOCO
+        // ==========================================
+
+        bottoneQuadroGeneratore.addActionListener(e -> cambiaSchermo(3)); // Apre i fili
+        bottoneValigietta.addActionListener(e -> cambiaSchermo(1));
+        bottoneMappa.addActionListener(e -> cambiaSchermo(2));
+        btnIndietro.addActionListener(e -> cambiaSchermo(0));
+
+        // Listener dei rulli numerici
+        btnNum1.addActionListener(ev -> { num1 = (num1 + 1) % 10; btnNum1.setText(String.valueOf(num1)); });
+        btnNum2.addActionListener(ev -> { num2 = (num2 + 1) % 10; btnNum2.setText(String.valueOf(num2)); });
+        btnNum3.addActionListener(ev -> { num3 = (num3 + 1) % 10; btnNum3.setText(String.valueOf(num3)); });
+        btnNum4.addActionListener(ev -> { num4 = (num4 + 1) % 10; btnNum4.setText(String.valueOf(num4)); });
+
+        // Logica pulsante APRI
+        btnApri.addActionListener(ev -> {
+            if (num1 == FORZA_CODICE_1 && num2 == FORZA_CODICE_2 && num3 == FORZA_CODICE_3 && num4 == FORZA_CODICE_4) {
+                valigiaAperta = true;
+                aggiornaVisibilitaDettaglioValigia();
+                pannelloDettaglio.repaint();
+                JOptionPane.showMessageDialog(this, "Click! La valigia si è aperta.", "Serratura", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                Toolkit.getDefaultToolkit().beep();
+                JOptionPane.showMessageDialog(this, "Codice Errato!", "Serratura", JOptionPane.WARNING_MESSAGE);
+            }
+        });
+
+        // Logica click sulla chiave invisibile
+        bottoneChiaveInvisibile.addActionListener(ev -> {
+            haChiave = true;
+            bottoneChiaveInvisibile.setVisible(false); 
+            JOptionPane.showMessageDialog(this, "Hai raccolto: CHIAVE DELLA PORTA!", "Inventario", JOptionPane.INFORMATION_MESSAGE);
+            pannelloDettaglio.repaint();
+        });
+
+        // Logica click sulla porta d'uscita
+        bottonePorta.addActionListener(e -> {
+            if (haChiave) {
+                JOptionPane.showMessageDialog(this, "Usi la chiave dorata sulla serratura...\nLa porta si apre cigolando!\n\nCOMPLIMENTI, SEI FUGGITO DAL VAGONE!", "Vittoria!", JOptionPane.INFORMATION_MESSAGE);
+                System.exit(0); 
+            } else {
+                JOptionPane.showMessageDialog(this, "La porta del vagone è bloccata dall'esterno.\nServe una chiave pesante per aprirla.", "Porta Chiusa", JOptionPane.WARNING_MESSAGE);
+            }
+        });
+
+        // COMPOSIZIONE FINALE NELLO SFONDO
+        labelSfondo.add(bottoneQuadroGeneratore);
+        labelSfondo.add(bottoneValigietta);
+        labelSfondo.add(bottoneMappa); 
+        labelSfondo.add(bottonePorta); 
+        labelSfondo.add(pannelloDettaglio); 
+        labelSfondo.add(pannelloCavi); 
+
+        cambiaSchermo(0);
+    }
+
+    // Costruisce graficamente il puzzle dei cavi elettrici
+    private void inizializzaPannelloCavi() {
+        pannelloCavi = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setStroke(new BasicStroke(5)); // Linee dei cavi spesse
+
+                // Disegna sfondo grigio scuro del quadro elettrico
+                g2.setColor(new Color(40, 40, 45));
+                g2.fillRect(0, 0, 500, 380);
+
+                // Scritta informativa superiore
+                g2.setColor(Color.WHITE);
+                g2.setFont(new Font("Arial", Font.BOLD, 14));
+                g2.drawString("SISTEMA ELETTRICO INTERROTTO: Collega i fili dello stesso colore", 30, 30);
+
+                // Disegna linee se i cavi sono connessi
+                if (cavoRossoConnesso) { g2.setColor(Color.RED); g2.drawLine(50, 100, 450, 220); }
+                if (cavoBluConnesso) { g2.setColor(Color.BLUE); g2.drawLine(50, 160, 450, 100); }
+                if (cavoGialloConnesso) { g2.setColor(Color.YELLOW); g2.drawLine(50, 220, 450, 160); }
+            }
+        };
+        pannelloCavi.setBounds(150, 40, 500, 430);
+        pannelloCavi.setLayout(null);
+        pannelloCavi.setVisible(false);
+
+        // PIN DI SINISTRA (Selettori)
+        JButton pinSxRosso = new JButton("FILO ROSSO"); pinSxRosso.setBackground(Color.RED); pinSxRosso.setForeground(Color.WHITE);
+        JButton pinSxBlu = new JButton("FILO BLU"); pinSxBlu.setBackground(Color.BLUE); pinSxBlu.setForeground(Color.WHITE);
+        JButton pinSxGiallo = new JButton("FILO GIALLO"); pinSxGiallo.setBackground(Color.YELLOW); pinSxGiallo.setForeground(Color.BLACK);
+
+        pinSxRosso.setBounds(20, 85, 110, 30);
+        pinSxBlu.setBounds(20, 145, 110, 30);
+        pinSxGiallo.setBounds(20, 205, 110, 30);
+
+        // PIN DI DESTRA (Arrivi mescolati per fare l'indovinello)
+        JButton pinDxBlu = new JButton("CONNETTORE"); pinDxBlu.setBackground(Color.BLUE); pinDxBlu.setForeground(Color.WHITE);
+        JButton pinDxGiallo = new JButton("CONNETTORE"); pinDxGiallo.setBackground(Color.YELLOW); pinDxGiallo.setForeground(Color.BLACK);
+        JButton pinDxRosso = new JButton("CONNETTORE"); pinDxRosso.setBackground(Color.RED); pinDxRosso.setForeground(Color.WHITE);
+
+        pinDxBlu.setBounds(370, 85, 110, 30);
+        pinDxGiallo.setBounds(370, 145, 110, 30);
+        pinDxRosso.setBounds(370, 205, 110, 30);
+
+        // Azioni selezione Sinistra
+        pinSxRosso.addActionListener(e -> cavoSelezionato = 1);
+        pinSxBlu.addActionListener(e -> cavoSelezionato = 2);
+        pinSxGiallo.addActionListener(e -> cavoSelezionato = 3);
+
+        // Azioni collegamento Destra
+        pinDxRosso.addActionListener(e -> {
+            if (cavoSelezionato == 1) { cavoRossoConnesso = true; pinSxRosso.setEnabled(false); pinDxRosso.setEnabled(false); controllaFili(); }
+            cavoSelezionato = -1;
+        });
+        pinDxBlu.addActionListener(e -> {
+            if (cavoSelezionato == 2) { cavoBluConnesso = true; pinSxBlu.setEnabled(false); pinDxBlu.setEnabled(false); controllaFili(); }
+            cavoSelezionato = -1;
+        });
+        pinDxGiallo.addActionListener(e -> {
+            if (cavoSelezionato == 3) { cavoGialloConnesso = true; pinSxGiallo.setEnabled(false); pinDxGiallo.setEnabled(false); controllaFili(); }
+            cavoSelezionato = -1;
+        });
+
+        // Bottone per uscire dal minigioco
+        JButton btnChiudiCavi = new JButton("⬅ Torna al Vagone Buio");
+        btnChiudiCavi.setBounds(165, 390, 180, 25);
+        btnChiudiCavi.setBackground(Color.DARK_GRAY);
+        btnChiudiCavi.setForeground(Color.WHITE);
+        btnChiudiCavi.addActionListener(e -> cambiaSchermo(0));
+
+        pannelloCavi.add(pinSxRosso); pannelloCavi.add(pinSxBlu); pannelloCavi.add(pinSxGiallo);
+        pannelloCavi.add(pinDxBlu); pannelloCavi.add(pinDxGiallo); pannelloCavi.add(pinDxRosso);
+        pannelloCavi.add(btnChiudiCavi);
+    }
+
+    // Verifica se tutti i fili sono stati uniti correttamente
+    private void controllaFili() {
+        pannelloCavi.repaint();
+        if (cavoRossoConnesso && cavoBluConnesso && cavoCavoGialloConnesso()) {
+            luceAccesa = true;
+            JOptionPane.showMessageDialog(this, "BZZZZT! I cavi fanno contatto.\nLa luce del vagone si accende improvvisamente!", "Corrente Ripristinata", JOptionPane.INFORMATION_MESSAGE);
+            cambiaSchermo(0); // Ritorna al vagone, che ora sarà illuminato!
+        }
+    }
+    
+    private boolean cavoCavoGialloConnesso() { return cavoGialloConnesso; }
+
+    // Gestione degli stati visivi e blocchi basati sulla luce
+    private void cambiaSchermo(int nuovoStato) {
+        statoSchermo = nuovoStato;
+
+        // Imposta l'immagine principale in base alla luce accesa/spenta
+        if (luceAccesa) {
+            labelSfondo.setIcon(imgVagone);
+            bottoneQuadroGeneratore.setVisible(false); // Scompare perché la luce è già accesa
+        } else {
+            labelSfondo.setIcon(imgVagoneBuio);
+            bottoneQuadroGeneratore.setVisible(statoSchermo == 0);
+        }
+
+        if (statoSchermo == 0) { // VISUALE GENERALE VAGONE
+            pannelloDettaglio.setVisible(false);
+            pannelloCavi.setVisible(false);
+            
+            // Gli altri elementi appaiono SOLO se la luce è accesa!
+            bottoneValigietta.setVisible(luceAccesa);
+            bottoneMappa.setVisible(luceAccesa);
+            bottonePorta.setVisible(luceAccesa);
+        } 
+        else if (statoSchermo == 1) { // FOCUS VALIGIA
+            disattivaBottoniPrincipali();
+            pannelloDettaglio.setVisible(true);
+            aggiornaVisibilitaDettaglioValigia();
+        } 
+        else if (statoSchermo == 2) { // FOCUS MAPPA
+            disattivaBottoniPrincipali();
+            pannelloDettaglio.setVisible(true);
+            
+            btnNum1.setVisible(false); btnNum2.setVisible(false); btnNum3.setVisible(false); btnNum4.setVisible(false);
+            btnApri.setVisible(false);
+            bottoneChiaveInvisibile.setVisible(false);
+        }
+        else if (statoSchermo == 3) { // FOCUS ENIGMA CAVI ELETTRECI
+            disattivaBottoniPrincipali();
+            pannelloCavi.setVisible(true);
+        }
+        
+        if (pannelloDettaglio != null) pannelloDettaglio.repaint();
+        labelSfondo.repaint();
+    }
+
+    private void disattivaBottoniPrincipali() {
+        bottoneValigietta.setVisible(false);
+        bottoneMappa.setVisible(false);
+        bottonePorta.setVisible(false);
+        bottoneQuadroGeneratore.setVisible(false);
+    }
+
+    private void aggiornaVisibilitaDettaglioValigia() {
+        if (!valigiaAperta) {
+            btnNum1.setVisible(true); btnNum2.setVisible(true); btnNum3.setVisible(true); btnNum4.setVisible(true);
+            btnApri.setVisible(true);
+            bottoneChiaveInvisibile.setVisible(false);
+        } else {
+            btnNum1.setVisible(false); btnNum2.setVisible(false); btnNum3.setVisible(false); btnNum4.setVisible(false);
+            btnApri.setVisible(false);
+            bottoneChiaveInvisibile.setVisible(!haChiave);
+        }
+    }
+
+    private JButton creaBottoneTrasparente(int x, int y, int largh, int alt) {
+        JButton btn = new JButton();
+        btn.setBounds(x, y, largh, alt);
+        btn.setBorderPainted(false);
+        btn.setContentAreaFilled(false);
+        btn.setFocusPainted(false);
+        btn.setOpaque(false);
+        return btn;
+    }
+
+    private ImageIcon caricaIcona(String percorso, int l, int a) {
+        URL url = getClass().getResource(percorso);
+        if (url != null) {
+            return new ImageIcon(new ImageIcon(url).getImage().getScaledInstance(l, a, Image.SCALE_SMOOTH));
+        }
+        System.err.println("ERRORE: Manca file '" + percorso + "'");
+        return null;
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new EscapeRoom1().setVisible(true));
+    }
+}
